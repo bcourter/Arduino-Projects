@@ -40,7 +40,7 @@ uint8_t clockPin = 3;    // Green wire on Adafruit Pixels
 Adafruit_WS2801 strip = Adafruit_WS2801(50, dataPin, clockPin);
 
 // number of items in an array
-template< typename T, size_t N > size_t ArraySize (T (&) [N]){ return N; }
+//template< typename T, size_t N > size_t ArraySize (T (&) [N]){ return N; }
 
 Face getFace(int f) {
   return PROGMEM_getAnything(&faces[f]);
@@ -67,7 +67,7 @@ void loop() {
   //  rainbow(20);
   //  rainbowCycle(20);
 
-   animateFaces(1000);
+  animateFaceLoops(5);
 
 }
 
@@ -78,23 +78,46 @@ void animateFaces(uint8_t wait) {
   //  }
 
   for (byte j = 0; j < 256; j++) {   // 3 cycles of all 256 colors in the wheel
-    uint8_t f = random(12);
-  
-    Face face = getFace(f);
+    uint8_t f = 5; //random(12);
 
-  
+    Face face = getFace(f);
     Face antipode = getFace(getFace(f).antipode);
-    
+
     for (byte i = 0; i < 5; i++) {
-      strip.setPixelColor(vertexLeds[face.vertices[i]], Wheel((j*33)% 255));
-      strip.setPixelColor(vertexLeds[antipode.vertices[i]], Wheel((j + 24) % 255));
-      strip.setPixelColor(edgeLeds[face.edges[i]], Wheel((j + 0) % 255));
-      strip.setPixelColor(edgeLeds[antipode.edges[i]], Wheel((j + 24) % 255));
+      strip.setPixelColor(vertexLeds[face.vertices[i]], Wheel((j) % 255));
+      strip.setPixelColor(vertexLeds[antipode.vertices[i]], Wheel((j + 48) % 255));
+      strip.setPixelColor(edgeLeds[face.edges[i]], Wheel((i * 30) % 255));
+      strip.setPixelColor(edgeLeds[antipode.edges[i]], Wheel((i * 30) % 255));
     }
-    
+
     strip.show();   // write all the pixels out
     delay(wait);
   }
+}
+
+void animateFaceLoops(uint8_t wait) {
+  byte f = random(12);
+
+  Face face = getFace(f);
+  Face antipode = getFace(getFace(f).antipode);
+  byte cycles = 4;
+  
+  for (byte i = 0; i < 255; i++) {
+    byte ic = i * cycles;
+    strip.setPixelColor(vertexLeds[face.vertices[i % 5]], Wheel((ic) % 255));
+    strip.setPixelColor(vertexLeds[antipode.vertices[i % 5]], Wheel((ic + 127) % 255));
+
+    delay(wait);
+    strip.show();   // write all the pixels out
+
+    strip.setPixelColor(edgeLeds[face.edges[i % 5]], Wheel((ic) % 255));
+    strip.setPixelColor(edgeLeds[antipode.edges[i % 5]], Wheel((ic + 127) % 255));
+
+    delay(wait);
+    strip.show();   // write all the pixels out
+  }
+
+
 }
 
 //void rainbow(uint8_t wait) {
