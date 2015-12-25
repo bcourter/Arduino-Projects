@@ -46,6 +46,13 @@ Face getFace(int f) {
   return PROGMEM_getAnything(&faces[f]);
 }
 
+Edge getEdge(int e) {
+  return PROGMEM_getAnything(&edges[e]);
+}
+
+Vertex getVertex(int v) {
+  return PROGMEM_getAnything(&vertices[v]);
+}
 
 
 void setup() {
@@ -67,7 +74,7 @@ void loop() {
   //  rainbow(20);
   //  rainbowCycle(20);
 
-  animateFaceLoops(5);
+  sparkle(400);
 
 }
 
@@ -97,27 +104,74 @@ void animateFaces(uint8_t wait) {
 
 void animateFaceLoops(uint8_t wait) {
   byte f = random(12);
-
   Face face = getFace(f);
   Face antipode = getFace(getFace(f).antipode);
   byte cycles = 4;
-  
+
   for (byte i = 0; i < 255; i++) {
     byte ic = i * cycles;
     strip.setPixelColor(vertexLeds[face.vertices[i % 5]], Wheel((ic) % 255));
     strip.setPixelColor(vertexLeds[antipode.vertices[i % 5]], Wheel((ic + 127) % 255));
 
     delay(wait);
-    strip.show();   // write all the pixels out
+    strip.show();
 
     strip.setPixelColor(edgeLeds[face.edges[i % 5]], Wheel((ic) % 255));
     strip.setPixelColor(edgeLeds[antipode.edges[i % 5]], Wheel((ic + 127) % 255));
 
     delay(wait);
-    strip.show();   // write all the pixels out
+    strip.show();
+  }
+}
+
+void sparkle(int wait) {
+  for (uint8_t i = 0; i < strip.numPixels(); i++) {
+    strip.setPixelColor(i, Color(0, 0, 0));
   }
 
+  byte v = random(20);
+  long color = Wheel(random(255));
 
+  Vertex vertex = getVertex(v);
+  strip.setPixelColor(vertexLeds[v], color);
+  strip.show();
+  delay(wait);
+
+  recurseSparkle(v, color, wait, 3);
+}
+
+void recurseSparkle(byte v, long color, int wait, byte depth) {
+  if (depth == 0)
+    return;
+
+  Vertex vertex = getVertex(v);
+  strip.setPixelColor(edgeLeds[vertex.edgeA], color);
+  strip.setPixelColor(edgeLeds[vertex.edgeB], color);
+  strip.setPixelColor(edgeLeds[vertex.edgeC], color);
+  strip.show();
+  delay(wait);
+
+  byte vA = spreadToVertex(vertex.edgeA, v);
+  byte vB = spreadToVertex(vertex.edgeB, v);
+  byte vC = spreadToVertex(vertex.edgeC, v);
+  strip.setPixelColor(vertexLeds[vA], color);
+  strip.setPixelColor(vertexLeds[vB], color);
+  strip.setPixelColor(vertexLeds[vC], color);
+
+  strip.show();
+  delay(wait);
+
+  recurseSparkle(spreadToVertex(vertex.edgeA, v), color, wait, depth - 1);
+  recurseSparkle(spreadToVertex(vertex.edgeB, v), color, wait, depth - 1);
+  recurseSparkle(spreadToVertex(vertex.edgeC, v), color, wait, depth - 1);
+}
+
+byte spreadToVertex(byte e, byte prevV) {
+  Edge edge = getEdge(e);
+  if (edge.vertexA == prevV)
+    return edge.vertexB;
+
+  return edge.vertexA;
 }
 
 //void rainbow(uint8_t wait) {
