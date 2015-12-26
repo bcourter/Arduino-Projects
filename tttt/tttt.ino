@@ -54,6 +54,9 @@ Vertex getVertex(int v) {
   return PROGMEM_getAnything(&vertices[v]);
 }
 
+Tetrahedron getTetrahedron(int t) {
+  return PROGMEM_getAnything(&tetrahedra[t]);
+}
 
 void setup() {
 #if defined(__AVR_ATtiny85__) && (F_CPU == 16000000L)
@@ -66,16 +69,33 @@ void setup() {
 
 
 void loop() {
-  // Some example procedures showing how to display to the pixels
+  animateTetrahedra(300);
+}
 
-  //  colorWipe(Color(255, 0, 0), 50);
-  //  colorWipe(Color(0, 255, 0), 50);
-  //  colorWipe(Color(0, 0, 255), 50);
-  //  rainbow(20);
-  //  rainbowCycle(20);
+byte t = 0;
+byte hue = 0;
+void animateTetrahedra(int wait) {
 
-  sparkle(400);
+  for (byte i = 0; i < strip.numPixels(); i++) {
+    strip.setPixelColor(i, Color(0, 0, 0));
+  }
 
+  Tetrahedron tetrahedron = getTetrahedron(t++);
+
+  long color = Wheel(hue++);
+  for (byte i = 0; i < 4; i++) {
+    strip.setPixelColor(vertexLeds[tetrahedron.vertices[i]], color);
+  }
+
+  for (byte i = 0; i < 6; i++) {
+    strip.setPixelColor(edgeLeds[tetrahedron.edges[i]], color);
+  }
+
+  strip.show();   // write all the pixels out
+  delay(wait);
+
+  if (t > 4)
+    t = 0;
 }
 
 void animateFaces(uint8_t wait) {
@@ -124,6 +144,7 @@ void animateFaceLoops(uint8_t wait) {
   }
 }
 
+float c = 1.5;
 void sparkle(int wait) {
   for (uint8_t i = 0; i < strip.numPixels(); i++) {
     strip.setPixelColor(i, Color(0, 0, 0));
@@ -137,14 +158,15 @@ void sparkle(int wait) {
   strip.show();
   delay(wait);
 
-  recurseSparkle(v, color, wait, 3);
+  recurseSparkle(v, GetR(color) * c, GetG(color) * c, GetB(color) * c, wait, 3);
 }
 
-void recurseSparkle(byte v, long color, int wait, byte depth) {
+void recurseSparkle(byte v, byte r, byte g, byte b, int wait, byte depth) {
   if (depth == 0)
     return;
 
   Vertex vertex = getVertex(v);
+  long color = Color(r, g, b);
   strip.setPixelColor(edgeLeds[vertex.edgeA], color);
   strip.setPixelColor(edgeLeds[vertex.edgeB], color);
   strip.setPixelColor(edgeLeds[vertex.edgeC], color);
@@ -154,6 +176,7 @@ void recurseSparkle(byte v, long color, int wait, byte depth) {
   byte vA = spreadToVertex(vertex.edgeA, v);
   byte vB = spreadToVertex(vertex.edgeB, v);
   byte vC = spreadToVertex(vertex.edgeC, v);
+  color = Color(r * c, g * c, b * c);
   strip.setPixelColor(vertexLeds[vA], color);
   strip.setPixelColor(vertexLeds[vB], color);
   strip.setPixelColor(vertexLeds[vC], color);
@@ -161,9 +184,10 @@ void recurseSparkle(byte v, long color, int wait, byte depth) {
   strip.show();
   delay(wait);
 
-  recurseSparkle(spreadToVertex(vertex.edgeA, v), color, wait, depth - 1);
-  recurseSparkle(spreadToVertex(vertex.edgeB, v), color, wait, depth - 1);
-  recurseSparkle(spreadToVertex(vertex.edgeC, v), color, wait, depth - 1);
+
+  recurseSparkle(spreadToVertex(vertex.edgeA, v), r * c, g * c, b * c, wait, depth - 1);
+  recurseSparkle(spreadToVertex(vertex.edgeB, v), r * c, g * c, b * c, wait, depth - 1);
+  recurseSparkle(spreadToVertex(vertex.edgeC, v), r * c, g * c, b * c, wait, depth - 1);
 }
 
 byte spreadToVertex(byte e, byte prevV) {
@@ -219,8 +243,7 @@ byte spreadToVertex(byte e, byte prevV) {
 /* Helper functions */
 
 // Create a 24 bit color value from R,G,B
-uint32_t Color(byte r, byte g, byte b)
-{
+long Color(byte r, byte g, byte b) {
   uint32_t c;
   c = r;
   c <<= 8;
@@ -228,6 +251,19 @@ uint32_t Color(byte r, byte g, byte b)
   c <<= 8;
   c |= b;
   return c;
+}
+
+byte GetR(long color) {
+  color >> 16;
+  return (byte) ((color >> 16) & 0xff);
+}
+
+byte GetG(long color) {
+  return (byte) ((color >> 8) & 0xff);
+}
+
+byte GetB(long color) {
+  return (byte) (color & 0xff);
 }
 
 //Input a value 0 to 255 to get a color value.
