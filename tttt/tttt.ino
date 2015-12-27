@@ -39,24 +39,6 @@ uint8_t clockPin = 3;    // Green wire on Adafruit Pixels
 // Set the first variable to the NUMBER of pixels. 25 = 25 pixels in a row
 Adafruit_WS2801 strip = Adafruit_WS2801(50, dataPin, clockPin);
 
-// number of items in an array
-//template< typename T, size_t N > size_t ArraySize (T (&) [N]){ return N; }
-
-Face getFace(int f) {
-  return PROGMEM_getAnything(&faces[f]);
-}
-
-Edge getEdge(int e) {
-  return PROGMEM_getAnything(&edges[e]);
-}
-
-Vertex getVertex(int v) {
-  return PROGMEM_getAnything(&vertices[v]);
-}
-
-Tetrahedron getTetrahedron(int t) {
-  return PROGMEM_getAnything(&tetrahedra[t]);
-}
 
 void setup() {
 #if defined(__AVR_ATtiny85__) && (F_CPU == 16000000L)
@@ -80,21 +62,25 @@ void animateTetrahedra(int wait) {
     strip.setPixelColor(i, Color(0, 0, 0));
   }
 
-  Tetrahedron tetrahedron = getTetrahedron(t++);
+  Tetrahedron tetrahedron = getTetrahedron(t);
+  Tetrahedron tetrahedron2 = getTetrahedron((t + 5) % 10);
 
   long color = Wheel(hue++);
+  long color2 = Wheel((hue + 126) % 255);
   for (byte i = 0; i < 4; i++) {
-    strip.setPixelColor(vertexLeds[tetrahedron.vertices[i]], color);
+    strip.setPixelColor(getVertex(tetrahedron.vertices[i]).led, color);
+    strip.setPixelColor(getVertex(tetrahedron2.vertices[i]).led, color2);
   }
 
   for (byte i = 0; i < 6; i++) {
-    strip.setPixelColor(edgeLeds[tetrahedron.edges[i]], color);
+    strip.setPixelColor(getEdge(tetrahedron.edges[i]).led, color);
+    strip.setPixelColor(getEdge(tetrahedron2.edges[i]).led, color2);
   }
 
   strip.show();   // write all the pixels out
   delay(wait);
 
-  if (t > 4)
+  if (++t > 4)
     t = 0;
 }
 
@@ -111,10 +97,10 @@ void animateFaces(uint8_t wait) {
     Face antipode = getFace(getFace(f).antipode);
 
     for (byte i = 0; i < 5; i++) {
-      strip.setPixelColor(vertexLeds[face.vertices[i]], Wheel((j) % 255));
-      strip.setPixelColor(vertexLeds[antipode.vertices[i]], Wheel((j + 48) % 255));
-      strip.setPixelColor(edgeLeds[face.edges[i]], Wheel((i * 30) % 255));
-      strip.setPixelColor(edgeLeds[antipode.edges[i]], Wheel((i * 30) % 255));
+      strip.setPixelColor(getVertex(face.vertices[i]).led, Wheel((j) % 255));
+      strip.setPixelColor(getVertex(antipode.vertices[i]).led, Wheel((j + 48) % 255));
+      strip.setPixelColor(getEdge(face.edges[i]).led, Wheel((i * 30) % 255));
+      strip.setPixelColor(getEdge(antipode.edges[i]).led, Wheel((i * 30) % 255));
     }
 
     strip.show();   // write all the pixels out
@@ -130,14 +116,14 @@ void animateFaceLoops(uint8_t wait) {
 
   for (byte i = 0; i < 255; i++) {
     byte ic = i * cycles;
-    strip.setPixelColor(vertexLeds[face.vertices[i % 5]], Wheel((ic) % 255));
-    strip.setPixelColor(vertexLeds[antipode.vertices[i % 5]], Wheel((ic + 127) % 255));
+    strip.setPixelColor(getVertex(face.vertices[i % 5]).led, Wheel((ic) % 255));
+    strip.setPixelColor(getVertex(antipode.vertices[i % 5]).led, Wheel((ic + 127) % 255));
 
     delay(wait);
     strip.show();
 
-    strip.setPixelColor(edgeLeds[face.edges[i % 5]], Wheel((ic) % 255));
-    strip.setPixelColor(edgeLeds[antipode.edges[i % 5]], Wheel((ic + 127) % 255));
+    strip.setPixelColor(getEdge(face.edges[i % 5]).led, Wheel((ic) % 255));
+    strip.setPixelColor(getEdge(antipode.edges[i % 5]).led, Wheel((ic + 127) % 255));
 
     delay(wait);
     strip.show();
@@ -146,7 +132,7 @@ void animateFaceLoops(uint8_t wait) {
 
 float c = 1.5;
 void sparkle(int wait) {
-  for (uint8_t i = 0; i < strip.numPixels(); i++) {
+  for (byte i = 0; i < strip.numPixels(); i++) {
     strip.setPixelColor(i, Color(0, 0, 0));
   }
 
@@ -154,7 +140,7 @@ void sparkle(int wait) {
   long color = Wheel(random(255));
 
   Vertex vertex = getVertex(v);
-  strip.setPixelColor(vertexLeds[v], color);
+  strip.setPixelColor(vertex.led, color);
   strip.show();
   delay(wait);
 
@@ -167,27 +153,25 @@ void recurseSparkle(byte v, byte r, byte g, byte b, int wait, byte depth) {
 
   Vertex vertex = getVertex(v);
   long color = Color(r, g, b);
-  strip.setPixelColor(edgeLeds[vertex.edgeA], color);
-  strip.setPixelColor(edgeLeds[vertex.edgeB], color);
-  strip.setPixelColor(edgeLeds[vertex.edgeC], color);
+  for (byte i = 0; i < 3; i++) {
+    strip.setPixelColor(getEdge(vertex.edges[i]).led, color);
+  }
+
   strip.show();
   delay(wait);
 
-  byte vA = spreadToVertex(vertex.edgeA, v);
-  byte vB = spreadToVertex(vertex.edgeB, v);
-  byte vC = spreadToVertex(vertex.edgeC, v);
   color = Color(r * c, g * c, b * c);
-  strip.setPixelColor(vertexLeds[vA], color);
-  strip.setPixelColor(vertexLeds[vB], color);
-  strip.setPixelColor(vertexLeds[vC], color);
+  for (byte i = 0; i < 3; i++) {
+    byte vNext = spreadToVertex(vertex.edges[i], v);
+    strip.setPixelColor(getVertex(vNext).led, color);
+  }
 
   strip.show();
   delay(wait);
 
-
-  recurseSparkle(spreadToVertex(vertex.edgeA, v), r * c, g * c, b * c, wait, depth - 1);
-  recurseSparkle(spreadToVertex(vertex.edgeB, v), r * c, g * c, b * c, wait, depth - 1);
-  recurseSparkle(spreadToVertex(vertex.edgeC, v), r * c, g * c, b * c, wait, depth - 1);
+  for (byte i = 0; i < 3; i++) {
+    recurseSparkle(spreadToVertex(vertex.edges[i], v), r * c, g * c, b * c, wait, depth - 1);
+  }
 }
 
 byte spreadToVertex(byte e, byte prevV) {
@@ -281,3 +265,22 @@ uint32_t Wheel(byte WheelPos)
   }
 }
 
+
+// number of items in an array
+//template< typename T, size_t N > size_t ArraySize (T (&) [N]){ return N; }
+
+Face getFace(int f) {
+  return PROGMEM_getAnything(&faces[f]);
+}
+
+Edge getEdge(int e) {
+  return PROGMEM_getAnything(&edges[e]);
+}
+
+Vertex getVertex(int v) {
+  return PROGMEM_getAnything(&vertices[v]);
+}
+
+Tetrahedron getTetrahedron(int t) {
+  return PROGMEM_getAnything(&tetrahedra[t]);
+}
