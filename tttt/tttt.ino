@@ -176,10 +176,10 @@ void recurseSparkle(byte v, byte r, byte g, byte b, int wait, byte depth) {
 
 byte spreadToVertex(byte e, byte prevV) {
   Edge edge = getEdge(e);
-  if (edge.vertexA == prevV)
-    return edge.vertexB;
+  if (edge.vertices[0] == prevV)
+    return edge.vertices[1];
 
-  return edge.vertexA;
+  return edge.vertices[0];
 }
 
 //void rainbow(uint8_t wait) {
