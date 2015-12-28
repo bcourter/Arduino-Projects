@@ -5,7 +5,7 @@ typedef struct {
   byte edges[5];
 } Face;
 
-Face getFace(int f);  // need to declare prototype when returning struct
+Face getFace(int f);  // need to declare prototype when returning custom type
 
 const Face faces[12] PROGMEM = {
   {11, {0, 1, 2, 3, 4}, {0, 1, 2, 3, 4}},
@@ -31,39 +31,39 @@ typedef struct {
 } Edge;
 
 const Edge edges[30] PROGMEM = { // in order of id
-  {0, 48, 7, {0, 1}},
-  {1, 46, 7, {1, 2}},
-  {2, 44, 7, {2, 3}},
-  {3, 42, 7, {3, 4}},
-  {4, 40, 7, {0, 4}},
-  {5, 39, 6, {0, 6}},
-  {6, 38, 6, {1, 7}},
-  {7, 37, 6, {2, 8}},
-  {8, 36, 6, {3, 9}},
-  {9, 35, 6, {4, 5}},
-  {10, 34, 5, {5, 11}},
-  {11, 32, 5, {6, 12}},
-  {12, 30, 5, {7, 13}},
-  {13, 28, 5, {8, 14}},
-  {14, 26, 5, {9, 10}},
-  {15, 23, 4, {5, 10}},
-  {16, 21, 4, {6, 11}},
-  {17, 19, 4, {7, 12}},
-  {18, 17, 4, {8, 13}},
-  {19, 15, 4, {9, 14}},
-  {20, 14, 2, {10, 16}},
-  {21, 13, 2, {11, 17}},
-  {22, 12, 2, {12, 18}},
-  {23, 11, 2, {13, 19}},
-  {24, 10, 2, {14, 15}},
-  {25, 8, 0, {15, 16}},
-  {26, 6, 0, {16, 17}},
-  {27, 4, 0, {17, 18}},
-  {28, 2, 0, {18, 19}},
-  {29, 0, 0, {15, 19}}
+  {48, 7, 2, {0, 1}},
+  {46, 7, 6, {1, 2}},
+  {44, 7, 10, {2, 3}},
+  {42, 7, 14, {3, 4}},
+  {40, 7, 18, {0, 4}},
+  {39, 6, 0, {0, 6}},
+  {38, 6, 4, {1, 7}},
+  {37, 6, 8, {2, 8}},
+  {36, 6, 12, {3, 9}},
+  {35, 6, 16, {4, 5}},
+  {34, 5, 17, {5, 11}},
+  {32, 5, 1, {6, 12}},
+  {30, 5, 5, {7, 13}},
+  {28, 5, 9, {8, 14}},
+  {26, 5, 15, {9, 10}},
+  {23, 4, 15, {5, 10}},
+  {21, 4, 19, {6, 11}},
+  {19, 4, 3, {7, 12}},
+  {17, 4, 7, {8, 13}},
+  {15, 4, 11, {9, 14}},
+  {14, 2, 14, {10, 16}},
+  {13, 2, 18, {11, 17}},
+  {12, 2, 2, {12, 18}},
+  {11, 2, 6, {13, 19}},
+  {10, 2, 10, {14, 15}},
+  {8, 0, 12, {15, 16}},
+  {6, 0, 16, {16, 17}},
+  {4, 0, 0, {17, 18}},
+  {2, 0, 4, {18, 19}},
+  {0, 0, 8, {15, 19}}
 };
 
-Edge getEdge(int e);  // need to declare prototype when returning struct
+Edge getEdge(int e);  // need to declare prototype when returning custom type
 
 // Vertex
 typedef struct {
@@ -96,7 +96,7 @@ const Vertex vertices[20] PROGMEM = { // in order of id
   {1, 1, 6, {23, 28, 29}}
 };
 
-Vertex getVertex(int v); // need to declare prototype when returning struct
+Vertex getVertex(int v); // need to declare prototype when returning custom type
 
 // Tetrahedron
 typedef struct {
@@ -117,6 +117,6 @@ const Tetrahedron tetrahedra[20] PROGMEM = { // two parities first and second ha
   {{4, 8, 16, 12}, {2, 15, 5, 24, 12, 27}}
 };
 
-Tetrahedron getTetrahedron(int t);  // need to declare prototype when returning struct
+Tetrahedron getTetrahedron(int t);  // need to declare prototype when returning custom type
 
 
