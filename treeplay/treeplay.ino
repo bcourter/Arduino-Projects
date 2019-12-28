@@ -29,31 +29,42 @@
 // Can be any valid output pins.
 // The colors of the wires may be totally different so
 // BE SURE TO CHECK YOUR PIXELS TO SEE WHICH WIRES TO USE!
-uint8_t dataPin  = 2;    // Yellow wire on Adafruit Pixels
-uint8_t clockPin = 3;    // Green wire on Adafruit Pixels
+byte ledDataPin  = 2;    // Yellow wire on Adafruit Pixels
+byte ledClockPin = 3;    // Green wire on Adafruit Pixels
+
+byte modePin = 5;  // Change the program
+byte dataPin = 6;  // Change the color pattern
+byte ledPin = 13;  // For UI feedback
+byte analogPin = A0;  
+  
+const float PI2 = 6.28318530718;
+
+long HueToRGB(byte val);
+long Color(byte r, byte g, byte b);
 
 struct Led {
- // int r;
-  uint8_t theta;
-  uint8_t z;
+  byte theta;
+  byte z;
 };
 
-const uint16_t count = 350;
 const int levels = 12;
-//int levelCounts[levels] = {49, 38, 37, 33, 26, 3};
-//int levelCounts[levels] = {46, 42, 38, 34, 30, 26};
 int levelCounts[levels] = {46, 42, 38, 34, 30, 26, 22, 18, 14, 10, 8, 6};
-//int levelCounts[levels] = {42, 38, 34, 30, 26, 22, 18, 14, 10, 6};
+const int count = 294;  // sum of levelCounts
 
 struct Led leds[count];
+
+long red = Color(255, 0, 0);
+long green = Color(0, 255, 0);
+long blue = Color(0, 0, 255);
+long black = Color(0, 0, 0);
+long white = Color(100, 100, 100);
 
 int startHeight = 12; // in
 int layerHeight = 12; // in
 int startRadius = 32; // in
 int layerRadiusIncrement = -6; // in
 
-Adafruit_WS2801 strip = Adafruit_WS2801(count, dataPin, clockPin);
-
+Adafruit_WS2801 strip = Adafruit_WS2801(count, ledDataPin, ledClockPin);
 
 void setup() {
 #if defined(__AVR_ATtiny85__) && (F_CPU == 16000000L)
@@ -64,163 +75,231 @@ void setup() {
   // Update LED contents, to start they are all 'off'
   strip.show();
 
-  uint16_t current = 0;
+  int current = 0;
   for (int i = 0; i < levels; i++) {
     for (int j = 0; j < levelCounts[i]; j++) {
-  //    leds[current].r = startRadius + i * layerRadiusIncrement;
       leds[current].z = startHeight + i * layerHeight;
       leds[current].theta = 255 * j / levelCounts[i];
       current++;
     }
   }
 
+  pinMode(modePin, INPUT_PULLUP);
+  pinMode(dataPin, INPUT_PULLUP);
+  pinMode(analogPin, INPUT);
+  pinMode(ledPin, OUTPUT);
+
+  Serial.begin(9600);
+}
+
+long (*Wheel)(byte input) = &RainbowWheel;
+
+byte currentMode = 0;
+byte numModes = 4;
+
+byte currentProgram = 0;
+byte currentColor = 0;
+
+bool modeChangeLatch = false;
+bool dataChangeLatch = false;
+
+int offset = 0;
+int modifier = 0;
+int maxModifier = 1023;
+int modifierTol = 12;
+bool isModifierChanged = false;
+int increment = 1;
+int wait = 0;
+
+void loop() { 
+  int fader = analogRead(analogPin);  // read the input pin
+  if (abs(fader - modifier) > modifierTol)
+    isModifierChanged = true;
+  
+  if (isModifierChanged) {
+    modifier = fader;   
+    Serial.print("modifier: ");
+    Serial.println(modifier);
+}
+    
+  bool isModeChange = digitalRead(modePin) == LOW;
+  bool isDataChange = digitalRead(dataPin) == LOW;
+
+  if (!modeChangeLatch && isModeChange) {
+    currentMode++;
+    Serial.print("currentMode: ");
+    Serial.println(currentMode);
+    isModifierChanged = false;
+    modeChangeLatch = true;
+  } else if (!isModeChange) {
+    modeChangeLatch = false;
+  }
+
+  if (!dataChangeLatch && isDataChange) {
+    UpdateData(modifier);
+    
+    isModifierChanged = false;
+    dataChangeLatch = true;
+  } else if (!isDataChange) {
+    dataChangeLatch = false;
+  } 
+
+  switch (currentProgram) {
+    case 0:
+      rainbowCylinder(offset);
+      break;
+
+    case 1:
+      stripeCylinder(offset);
+      break;
+
+    case 2:
+      testPeriods(offset);
+      break;
+
+    default:
+      currentProgram = 0;
+      rainbowCylinder(offset);
+  }
+
+  strip.show();   // write all the pixels out
+  offset = (offset + increment) % 255;
+  delay(wait);
 }
 
 
-void loop() {
-  // Some example procedures showing how to display to the pixels
 
-  //  colorWipe(Color(255, 0, 0), 0);
-  //  colorWipe(Color(255, 150, 150), 0);
-  //  colorWipe(Color(0, 255, 0), 0);
+void UpdateData(int fader) {
+  switch (currentMode) {
+    case 0:
+      currentProgram++;
+      break;
+      
+    case 1:
+      currentColor++;
+      SwitchWheel();
+      break;
 
+    case 2:
+      increment = 10 * fader / maxModifier;
+      break;
+      
 
-  // colorWipe(Color(255, 0, 0), 50);
-  // colorWipe(Color(0, 255, 0), 50);
-  // colorWipe(Color(0, 0, 255), 50);
-  // rainbow(0);
-  // rainbowCycle(0);
-rainbowCylinder(0);
- // stripeCylinder(0);
-// testPeriods();
+    default:
+      currentMode = 0;
+  }
+  
+   //   modifier = fader;
 }
 
 
-void testPeriods() {
+//
+// Programs
+//
+
+void testPeriods(int offset) {  
+  for (int i = 0; i < strip.numPixels(); i++) {
+    strip.setPixelColor(i, black);
+  }
+  
   int levelFirst = 0;
   for (int i = 0; i < levels; i++) {
-    strip.setPixelColor(levelFirst, Color(255, 0, 0));
-    strip.setPixelColor(levelFirst + levelCounts[i] / 3, Color(0, 255, 0));
-    strip.setPixelColor(levelFirst + levelCounts[i] * 2 / 3, Color(0, 0, 255));
+    int offset = levelCounts[i] * modifier / maxModifier;
+    strip.setPixelColor(levelFirst + offset, red);
+    strip.setPixelColor(levelFirst + ((offset + levelCounts[i] / 3) % levelCounts[i]), green);
+    strip.setPixelColor(levelFirst + ((offset + levelCounts[i] * 2 / 3) % levelCounts[i]), blue);
     levelFirst += levelCounts[i];
   }
-
-  strip.show();
 }
 
-void rainbow(uint8_t wait) {
-  int i, j;
-
-  int speed = 8;
-  int wavelength = 1;
-
-  for (j = 0; j < 256; j += speed) { // 3 cycles of all 256 colors in the wheel
-    for (i = 0; i < strip.numPixels(); i++) {
-      strip.setPixelColor(i, Wheel( (i * wavelength + j) % 255));
-    }
-    strip.show();   // write all the pixels out
-    delay(wait);
-  }
-}
-
-int angle = 0;
-void stripeCylinder(uint8_t wait) {
-  int speed = 2;
-  int wavelength = 1;
-
-
-  for (int j = 0; j < 256; j += speed) { // 3 cycles of all 256 colors in the wheel
-    for (uint16_t i = 0; i < strip.numPixels(); i++) {
-      int opx = ((leds[i].theta * angle/255 + leds[i].z * (127-angle)/255 + j) % 127) > 63 ? 0 : 255;
-      strip.setPixelColor(i, Color(opx, opx * 2 / 8, opx / 8));
+void stripeCylinder(int offset) {
+  for (int i = 0; i < strip.numPixels(); i++) {
+    int opx = ((leds[i].theta * offset/255 + leds[i].z * (127-offset)/255 + offset) % 127) > 63 ? 0 : 255;
+    strip.setPixelColor(i, Color(opx, opx * 2 / 8, opx / 8));
 //      int opx = ((leds[i].theta  + (127-angle)/255 + j) % 127) > 63 ? 0 : 255;
 //      strip.setPixelColor(i, Color(255, opx * 2 / 8, opx / 8));
-    }
-    strip.show();   // write all the pixels out
-    delay(wait);
-  }
-
-  angle += 15;
-  angle = angle % 255;
-}
-
-void rainbowCylinder(uint8_t wait) {
-  int i, j;
-
-  int speed = 8;
-  int wavelength = 1;
-
-
-  for (j = 0; j < 256; j += speed) { // 3 cycles of all 256 colors in the wheel
-    for (i = 0; i < strip.numPixels(); i++) {
-      strip.setPixelColor(i, 
-    //    Wheel((leds[i].theta + leds[i].z * 3 + j) % 255) + 
-        Wheel((leds[i].theta - leds[i].z * 3 + j) % 255)
-      );
-    }
-    strip.show();   // write all the pixels out
-    delay(wait);
   }
 }
 
-// Slightly different, this one makes the rainbow wheel equally distributed
-// along the chain
-void rainbowCycle(uint8_t wait) {
-  int i, j;
-
-  int speed = 12;
-  int wavelength = 4;
-
-  for (j = 0; j < 256 * 5; j += speed) { // 5 cycles of all 25 colors in the wheel
-    for (i = 0; i < strip.numPixels(); i++) {
-      // tricky math! we use each pixel as a fraction of the full 96-color wheel
-      // (thats the i / strip.numPixels() part)
-      // Then add in j which makes the colors go around per pixel
-      // the % 96 is to make the wheel cycle around
-      strip.setPixelColor(i, Wheel( ((i * 256 * wavelength / strip.numPixels()) + j) % 256) );
-    }
-    strip.show();   // write all the pixels out
-    delay(wait);
+void rainbowCylinder(int offset) {
+  float faderFactor = (modifier - (maxModifier / 2)) / 256.0;
+  for (int i = 0; i < strip.numPixels(); i++) {
+    strip.setPixelColor(i, 
+      Wheel(int(leds[i].theta - leds[i].z * faderFactor + offset + 255) % 255)
+    );
   }
 }
 
-// fill the dots one after the other with said color
-// good for testing purposes
-void colorWipe(uint32_t c, uint8_t wait) {
-  int i;
+//
+// Color Wheeel Functions
+//
 
-  for (i = 0; i < strip.numPixels(); i++) {
-    strip.setPixelColor(i, c);
-    strip.show();
-    delay(wait);
+void SwitchWheel() {
+    switch (currentColor) {
+    case 0:
+      Wheel = &RainbowWheel;
+      break;
+      
+    case 1:
+      Wheel = &RedStripeWheel;
+      break;
+
+    case 2:
+      Wheel = &RedWhiteBlueWheel;
+      break;
+
+    default:
+      currentColor = 0;
+      Wheel = &RainbowWheel;
   }
 }
+
+long RainbowWheel (byte input) {
+  if (input < 85) {
+    return Color(input * 3, 255 - input * 3, 0);
+  }
+
+  if (input < 170) {
+    input -= 85;
+    return Color(255 - input * 3, 0, input * 3);
+  }
+
+  input -= 170;
+  return Color(0, input * 3, 255 - input * 3);
+}
+
+long RedStripeWheel (byte input) {
+  if (input % 64 < 32) {
+    return red;
+  }
+
+  return white;
+}
+
+long RedWhiteBlueWheel (byte input) {
+  input = (input * 2) % 255;
+  if (input < 85) {
+    return red;
+  }
+
+  if (input < 170) {
+    return blue;
+  }
+
+  return white;
+}
+
 
 /* Helper functions */
 
 // Create a 24 bit color value from R,G,B
-uint32_t Color(byte r, byte g, byte b)
+long Color(byte r, byte g, byte b)
 {
-  uint32_t c;
+  long c;
   c = r;
   c <<= 8;
   c |= g;
   c <<= 8;
   c |= b;
   return c;
-}
-
-//Input a value 0 to 255 to get a color value.
-//The colours are a transition r - g -b - back to r
-uint32_t Wheel(byte WheelPos)
-{
-  if (WheelPos < 85) {
-    return Color(WheelPos * 3, 255 - WheelPos * 3, 0);
-  } else if (WheelPos < 170) {
-    WheelPos -= 85;
-    return Color(255 - WheelPos * 3, 0, WheelPos * 3);
-  } else {
-    WheelPos -= 170;
-    return Color(0, WheelPos * 3, 255 - WheelPos * 3);
-  }
 }
