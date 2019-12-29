@@ -42,16 +42,16 @@ const float PI2 = 6.28318530718;
 long HueToRGB(byte val);
 long Color(byte r, byte g, byte b);
 
-struct Led {
+typedef struct {
   byte theta;
   byte z;
-};
+} Led;
 
 const int levels = 12;
 int levelCounts[levels] = {46, 42, 38, 34, 30, 26, 22, 18, 14, 10, 8, 6};
 const int count = 294;  // sum of levelCounts
 
-struct Led leds[count];
+Led leds[count];
 
 long red = Color(255, 0, 0);
 long green = Color(0, 255, 0);
@@ -65,6 +65,57 @@ int startRadius = 32; // in
 int layerRadiusIncrement = -6; // in
 
 Adafruit_WS2801 strip = Adafruit_WS2801(count, ledDataPin, ledClockPin);
+
+/*
+Program
+  Fader: nothing
+  Button: speed
+
+Edit
+  Fader: modify parameter N
+  Button: speed parameter
+
+Color
+  Fader: stretch
+  Button: speed
+
+Speed
+  Fader: speed
+  Button: reverse
+*/
+
+
+int offset = 0;
+int maxModifier = 1023;
+int modifierTol = 32;
+
+int modifierA = 0;
+bool isModifierAChanged = false;
+int modifierB = 0;
+bool isModifierBChanged = false;
+
+int increment = 1;
+bool isDirectionReversed = false;
+int wait = 0;
+
+
+long (*Wheel)(byte input) = &RainbowWheel;
+
+typedef struct Program {
+  void (*UpdateLeds)(int offset) = &RainbowCylinder;
+  int modifierA = 0;
+  int modifierB = 0;
+} Program;
+
+int currentProgram;
+const byte numPrograms = 3;
+Program programs[numPrograms];
+
+byte currentMode = 0;
+byte numModes = 4;
+
+byte currentColor = 0;
+int colorStretch = 1;
 
 void setup() {
 #if defined(__AVR_ATtiny85__) && (F_CPU == 16000000L)
@@ -89,107 +140,116 @@ void setup() {
   pinMode(analogPin, INPUT);
   pinMode(ledPin, OUTPUT);
 
+  
+   programs[1].UpdateLeds = &StripeCylinder;
+   programs[2].UpdateLeds = &TestPeriods;
+
   Serial.begin(9600);
 }
-
-long (*Wheel)(byte input) = &RainbowWheel;
-
-byte currentMode = 0;
-byte numModes = 4;
-
-byte currentProgram = 0;
-byte currentColor = 0;
 
 bool modeChangeLatch = false;
 bool dataChangeLatch = false;
 
-int offset = 0;
-int modifier = 0;
-int maxModifier = 1023;
-int modifierTol = 12;
-bool isModifierChanged = false;
-int increment = 1;
-int wait = 0;
-
 void loop() { 
   int fader = analogRead(analogPin);  // read the input pin
-  if (abs(fader - modifier) > modifierTol)
-    isModifierChanged = true;
-  
-  if (isModifierChanged) {
-    modifier = fader;   
-    Serial.print("modifier: ");
-    Serial.println(modifier);
-}
-    
   bool isModeChange = digitalRead(modePin) == LOW;
   bool isDataChange = digitalRead(dataPin) == LOW;
+  
+  if (!isDataChange && abs(fader - modifierA) > modifierTol)
+    isModifierAChanged = true;
+  
+  if (isDataChange && abs(fader - modifierB) > modifierTol)
+    isModifierBChanged = true;
+  
+  if (isModifierAChanged) {
+    modifierA = fader; 
+    isModifierBChanged = false;
+    UpdateData();  
+  }
+  
+  if (isModifierBChanged) {
+    modifierB = fader; 
+    isModifierAChanged = false;
+    UpdateData();  
+  }
 
   if (!modeChangeLatch && isModeChange) {
-    currentMode++;
+    currentMode = ++currentMode % numModes;
     Serial.print("currentMode: ");
     Serial.println(currentMode);
-    isModifierChanged = false;
+    isModifierAChanged = false;
+    isModifierBChanged = false;
     modeChangeLatch = true;
   } else if (!isModeChange) {
     modeChangeLatch = false;
   }
 
   if (!dataChangeLatch && isDataChange) {
-    UpdateData(modifier);
-    
-    isModifierChanged = false;
+    SwitchData();
+    isModifierAChanged = false;
+    isModifierBChanged = false;
     dataChangeLatch = true;
+    UpdateData();
   } else if (!isDataChange) {
     dataChangeLatch = false;
   } 
 
-  switch (currentProgram) {
-    case 0:
-      rainbowCylinder(offset);
-      break;
-
-    case 1:
-      stripeCylinder(offset);
-      break;
-
-    case 2:
-      testPeriods(offset);
-      break;
-
-    default:
-      currentProgram = 0;
-      rainbowCylinder(offset);
-  }
-
+  programs[currentProgram].UpdateLeds(offset);
   strip.show();   // write all the pixels out
-  offset = (offset + increment) % 255;
+  offset = (offset + increment + 256) % 256;
   delay(wait);
 }
 
 
 
-void UpdateData(int fader) {
+void SwitchData() {
   switch (currentMode) {
     case 0:
-      currentProgram++;
+      currentProgram = ++currentProgram % numPrograms;
       break;
       
     case 1:
-      currentColor++;
+      break;
+      
+    case 2:
       SwitchWheel();
       break;
 
+    case 3:
+      isDirectionReversed = !isDirectionReversed;
+      UpdateData();
+      break;
+  }
+}
+
+void UpdateData() {
+  switch (currentMode) {
+    case 0:
+      break;
+      
+    case 1:
+      programs[currentProgram].modifierA = modifierA;
+      programs[currentProgram].modifierB = modifierB;
+      
+      Serial.print("Program modifiers A and B: ");
+      Serial.print(modifierA);
+      Serial.print(", ");
+      Serial.println(modifierB);
+      break;
+      
     case 2:
-      increment = 10 * fader / maxModifier;
+      break;
+
+    case 3:
+      increment = 10 * modifierA / maxModifier * (isDirectionReversed ? -1 : 1);
+      Serial.print("Increment: ");
+      Serial.println(increment);
       break;
       
 
     default:
       currentMode = 0;
   }
-  
-   //   modifier = fader;
 }
 
 
@@ -197,22 +257,16 @@ void UpdateData(int fader) {
 // Programs
 //
 
-void testPeriods(int offset) {  
+void RainbowCylinder(int offset) {
+  float faderFactor = (programs[currentProgram].modifierA - (maxModifier / 2)) / 256.0;
   for (int i = 0; i < strip.numPixels(); i++) {
-    strip.setPixelColor(i, black);
-  }
-  
-  int levelFirst = 0;
-  for (int i = 0; i < levels; i++) {
-    int offset = levelCounts[i] * modifier / maxModifier;
-    strip.setPixelColor(levelFirst + offset, red);
-    strip.setPixelColor(levelFirst + ((offset + levelCounts[i] / 3) % levelCounts[i]), green);
-    strip.setPixelColor(levelFirst + ((offset + levelCounts[i] * 2 / 3) % levelCounts[i]), blue);
-    levelFirst += levelCounts[i];
+    strip.setPixelColor(i, 
+      Wheel(int(leds[i].theta - leds[i].z * faderFactor + offset + 256) % 256)
+    );
   }
 }
 
-void stripeCylinder(int offset) {
+void StripeCylinderXXX(int offset) {
   for (int i = 0; i < strip.numPixels(); i++) {
     int opx = ((leds[i].theta * offset/255 + leds[i].z * (127-offset)/255 + offset) % 127) > 63 ? 0 : 255;
     strip.setPixelColor(i, Color(opx, opx * 2 / 8, opx / 8));
@@ -221,12 +275,46 @@ void stripeCylinder(int offset) {
   }
 }
 
-void rainbowCylinder(int offset) {
-  float faderFactor = (modifier - (maxModifier / 2)) / 256.0;
+void StripeCylinder(int offset) {
+  float dirR = cos(PI2 * programs[currentProgram].modifierA / maxModifier);
+  float dirZ = sin(PI2 * programs[currentProgram].modifierA / maxModifier);
+  float dirX = cos(PI2 * programs[currentProgram].modifierB / maxModifier);
+  float dirY = sin(PI2 * programs[currentProgram].modifierB / maxModifier);
+  
+  int levelFirst = 0;
+  for (int i = 0; i < levels; i++) {
+    float radius = startRadius + layerRadiusIncrement * i;
+    for (int j = 0; j < levelCounts[i]; j++) {
+      int index = levelFirst + j;
+      Led led = leds[index];
+      float angle = PI2 * led.theta / 255;
+      float x = radius * cos(angle);
+      float y = radius * sin(angle);
+      float z = led.z;
+
+      float dot = x * dirX + y * dirY + z * dirZ;
+
+      strip.setPixelColor(index, 
+        Wheel((int(dot * 256 / 100) + offset + 256) % 256)
+      );
+    }
+    
+    levelFirst += levelCounts[i];
+  }
+}
+
+void TestPeriods(int offset) {  
   for (int i = 0; i < strip.numPixels(); i++) {
-    strip.setPixelColor(i, 
-      Wheel(int(leds[i].theta - leds[i].z * faderFactor + offset + 255) % 255)
-    );
+    strip.setPixelColor(i, black);
+  }
+  
+  int levelFirst = 0;
+  for (int i = 0; i < levels; i++) {
+    int offset = levelCounts[i] * modifierA / maxModifier;
+    strip.setPixelColor(levelFirst + offset, red);
+    strip.setPixelColor(levelFirst + ((offset + levelCounts[i] / 3) % levelCounts[i]), green);
+    strip.setPixelColor(levelFirst + ((offset + levelCounts[i] * 2 / 3) % levelCounts[i]), blue);
+    levelFirst += levelCounts[i];
   }
 }
 
@@ -235,7 +323,7 @@ void rainbowCylinder(int offset) {
 //
 
 void SwitchWheel() {
-    switch (currentColor) {
+    switch (++currentColor) {
     case 0:
       Wheel = &RainbowWheel;
       break;
@@ -277,7 +365,7 @@ long RedStripeWheel (byte input) {
 }
 
 long RedWhiteBlueWheel (byte input) {
-  input = (input * 2) % 255;
+  input = (input * 2) % 256;
   if (input < 85) {
     return red;
   }
