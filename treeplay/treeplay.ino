@@ -37,7 +37,7 @@ byte dataPin = 6;  // Change the color pattern
 byte ledPin = 13;  // For UI feedback
 byte analogPin = A0;  
   
-const float PI2 = 6.28318530718;
+const float PI2 = PI * 2.0;
 
 long HueToRGB(byte val);
 long Color(byte r, byte g, byte b);
@@ -89,27 +89,34 @@ int offset = 0;
 int maxModifier = 1023;
 int modifierTol = 32;
 
-int modifierA = 0;
-bool isModifierAChanged = false;
-int modifierB = 0;
-bool isModifierBChanged = false;
+typedef struct {
+  int value = 0;
+  bool isChanged = false;
+} Modifier;
 
+Modifier incrementModifier;
 int increment = 1;
 bool isDirectionReversed = false;
 int wait = 0;
 
-
+Modifier* modifier = &incrementModifier;  
 long (*Wheel)(byte input) = &RainbowWheel;
 
-typedef struct Program {
-  void (*UpdateLeds)(int offset) = &RainbowCylinder;
-  int modifierA = 0;
-  int modifierB = 0;
+typedef struct {
+  void (*UpdateLeds)(int offset);
+  Modifier modifierA;
+  Modifier modifierB;
 } Program;
-
 int currentProgram;
-const byte numPrograms = 3;
-Program programs[numPrograms];
+
+
+Program programs[] = {
+  { .UpdateLeds = &RevolveProgram },
+  { .UpdateLeds = &RingsProgram },
+  { .UpdateLeds = &PlaneProgram },
+  { .UpdateLeds = &TestProgram }
+};
+int numPrograms = sizeof(programs) / sizeof(Program);
 
 byte currentMode = 0;
 byte numModes = 4;
@@ -140,36 +147,24 @@ void setup() {
   pinMode(analogPin, INPUT);
   pinMode(ledPin, OUTPUT);
 
-  
-   programs[1].UpdateLeds = &StripeCylinder;
-   programs[2].UpdateLeds = &TestPeriods;
-
   Serial.begin(9600);
 }
 
 bool modeChangeLatch = false;
 bool dataChangeLatch = false;
 
+int modeIndicatorWait = 8;
+long tick = 0;
 void loop() { 
   int fader = analogRead(analogPin);  // read the input pin
   bool isModeChange = digitalRead(modePin) == LOW;
   bool isDataChange = digitalRead(dataPin) == LOW;
   
-  if (!isDataChange && abs(fader - modifierA) > modifierTol)
-    isModifierAChanged = true;
-  
-  if (isDataChange && abs(fader - modifierB) > modifierTol)
-    isModifierBChanged = true;
-  
-  if (isModifierAChanged) {
-    modifierA = fader; 
-    isModifierBChanged = false;
-    UpdateData();  
-  }
-  
-  if (isModifierBChanged) {
-    modifierB = fader; 
-    isModifierAChanged = false;
+  if (abs(fader - modifier->value) > modifierTol)
+    modifier->isChanged = true;
+
+  if (modifier->isChanged) {
+    modifier->value = fader; 
     UpdateData();  
   }
 
@@ -177,19 +172,17 @@ void loop() {
     currentMode = ++currentMode % numModes;
     Serial.print("currentMode: ");
     Serial.println(currentMode);
-    isModifierAChanged = false;
-    isModifierBChanged = false;
     modeChangeLatch = true;
+    UpdateModifier();
   } else if (!isModeChange) {
     modeChangeLatch = false;
   }
 
   if (!dataChangeLatch && isDataChange) {
     SwitchData();
-    isModifierAChanged = false;
-    isModifierBChanged = false;
     dataChangeLatch = true;
     UpdateData();
+    UpdateModifier();
   } else if (!isDataChange) {
     dataChangeLatch = false;
   } 
@@ -197,10 +190,32 @@ void loop() {
   programs[currentProgram].UpdateLeds(offset);
   strip.show();   // write all the pixels out
   offset = (offset + increment + 256) % 256;
+
+  tick++;
+  digitalWrite(ledPin, (tick % modeIndicatorWait == 0 && (tick % (modeIndicatorWait * numModes)) / modeIndicatorWait <= currentMode) ? HIGH : LOW);
   delay(wait);
 }
 
 
+
+void UpdateModifier() {
+  modifier->isChanged = false;
+  switch (currentMode) {
+    case 0:
+      modifier = dataChangeLatch ? &programs[currentProgram].modifierB : &programs[currentProgram].modifierA;
+      break;
+      
+    case 1:
+      break;
+      
+    case 2:
+      break;
+
+    case 3:
+      modifier = &incrementModifier;
+      break;
+  }
+}
 
 void SwitchData() {
   switch (currentMode) {
@@ -228,20 +243,20 @@ void UpdateData() {
       break;
       
     case 1:
-      programs[currentProgram].modifierA = modifierA;
-      programs[currentProgram].modifierB = modifierB;
+//      programs[currentProgram].modifierA = modifierA;
+//      programs[currentProgram].modifierB = modifierB;
       
-      Serial.print("Program modifiers A and B: ");
-      Serial.print(modifierA);
-      Serial.print(", ");
-      Serial.println(modifierB);
+//      Serial.print("Program modifiers A and B: ");
+//      Serial.print(modifierA);
+//      Serial.print(", ");
+//      Serial.println(modifierB);
       break;
       
     case 2:
       break;
 
     case 3:
-      increment = 10 * modifierA / maxModifier * (isDirectionReversed ? -1 : 1);
+      increment = 10 * modifier->value / maxModifier * (isDirectionReversed ? -1 : 1);
       Serial.print("Increment: ");
       Serial.println(increment);
       break;
@@ -257,8 +272,8 @@ void UpdateData() {
 // Programs
 //
 
-void RainbowCylinder(int offset) {
-  float faderFactor = (programs[currentProgram].modifierA - (maxModifier / 2)) / 256.0;
+void RevolveProgram(int offset) {
+  float faderFactor = (programs[currentProgram].modifierA.value - (maxModifier / 2)) / 256.0;
   for (int i = 0; i < strip.numPixels(); i++) {
     strip.setPixelColor(i, 
       Wheel(int(leds[i].theta - leds[i].z * faderFactor + offset + 256) % 256)
@@ -266,20 +281,20 @@ void RainbowCylinder(int offset) {
   }
 }
 
-void StripeCylinderXXX(int offset) {
+void RingsProgram(int offset) {
+  float faderFactor = (programs[currentProgram].modifierA.value) / 256.0;
   for (int i = 0; i < strip.numPixels(); i++) {
-    int opx = ((leds[i].theta * offset/255 + leds[i].z * (127-offset)/255 + offset) % 127) > 63 ? 0 : 255;
-    strip.setPixelColor(i, Color(opx, opx * 2 / 8, opx / 8));
-//      int opx = ((leds[i].theta  + (127-angle)/255 + j) % 127) > 63 ? 0 : 255;
-//      strip.setPixelColor(i, Color(255, opx * 2 / 8, opx / 8));
+    strip.setPixelColor(i, 
+      Wheel(int(leds[i].z * faderFactor + offset + 256) % 256)
+    );
   }
 }
 
-void StripeCylinder(int offset) {
-  float dirR = cos(PI2 * programs[currentProgram].modifierA / maxModifier);
-  float dirZ = sin(PI2 * programs[currentProgram].modifierA / maxModifier);
-  float dirX = cos(PI2 * programs[currentProgram].modifierB / maxModifier);
-  float dirY = sin(PI2 * programs[currentProgram].modifierB / maxModifier);
+void PlaneProgram(int offset) {
+  float dirR = cos(PI * programs[currentProgram].modifierA.value / maxModifier);
+  float dirZ = sin(PI * programs[currentProgram].modifierA.value / maxModifier);
+  float dirX = cos(PI2 * programs[currentProgram].modifierB.value / maxModifier);
+  float dirY = sin(PI2 * programs[currentProgram].modifierB.value / maxModifier);
   
   int levelFirst = 0;
   for (int i = 0; i < levels; i++) {
@@ -303,14 +318,14 @@ void StripeCylinder(int offset) {
   }
 }
 
-void TestPeriods(int offset) {  
+void TestProgram(int offset) {  
   for (int i = 0; i < strip.numPixels(); i++) {
     strip.setPixelColor(i, black);
   }
   
   int levelFirst = 0;
   for (int i = 0; i < levels; i++) {
-    int offset = levelCounts[i] * modifierA / maxModifier;
+    int offset = levelCounts[i] * modifier->value / maxModifier;
     strip.setPixelColor(levelFirst + offset, red);
     strip.setPixelColor(levelFirst + ((offset + levelCounts[i] / 3) % levelCounts[i]), green);
     strip.setPixelColor(levelFirst + ((offset + levelCounts[i] * 2 / 3) % levelCounts[i]), blue);
@@ -336,6 +351,10 @@ void SwitchWheel() {
       Wheel = &RedWhiteBlueWheel;
       break;
 
+    case 3:
+      Wheel = &RainbowBlack;
+      break;
+
     default:
       currentColor = 0;
       Wheel = &RainbowWheel;
@@ -354,6 +373,10 @@ long RainbowWheel (byte input) {
 
   input -= 170;
   return Color(0, input * 3, 255 - input * 3);
+}
+
+long RainbowBlack (byte input){
+  return input < 128 ? RainbowWheel(input * 2) : black;
 }
 
 long RedStripeWheel (byte input) {
@@ -390,4 +413,38 @@ long Color(byte r, byte g, byte b)
   c <<= 8;
   c |= b;
   return c;
+}
+
+int sinRange = 1024;
+int sin(int x) {  // maximum is 1024
+  x = x % 1024;
+  
+  if (x < 256)
+    return sinLookup(x);
+  
+  if (x < 512)
+    return sinLookup(512 - x);
+  
+  if (x < 768)
+    return sinLookup(x - 512);
+
+  return sinLookup(1024 - x);
+}
+
+int sinTable[] = { 392, 724, 946 };  // of 1024
+int sinLookup(int x) {
+  if (x < 64)
+    return interpolate(x, 0, 64, 0, sinTable[0]);
+
+  if (x < 128)
+    return interpolate(x, 64, 128, sinTable[0], sinTable[1]);
+
+  if (x < 192)
+    return interpolate(x, 128, 192, sinTable[1], sinTable[2]);
+
+  return interpolate(x, 192, 256, sinTable[2], 1024);
+}
+
+int interpolate (int x, int x0, int x1, int y0, int y1) {
+  return (y1 - y0) * (x - x0) / (x1 - x0) + y0;
 }
