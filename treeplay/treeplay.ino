@@ -67,21 +67,31 @@ int layerRadiusIncrement = -6; // in
 Adafruit_WS2801 strip = Adafruit_WS2801(count, ledDataPin, ledClockPin);
 
 /*
-Program
-  Fader: nothing
-  Button: speed
+Yellow changes beween four modes:
 
-Edit
-  Fader: modify parameter N
-  Button: speed parameter
+Program (* - - -)
+  Fader: program main parameter
+  Green: change program
+    - Rotate
+    - Vertical
+    - Plane
+    - Test Pattern
 
-Color
-  Fader: stretch
-  Button: speed
+Edit (* * - -)
+  Fader: modify parameter for current program 
+  Green: toggle for fader to modify alternative parameter
 
-Speed
+Color (* * * -)
+  Fader: not implemented (considering color pattern multiplicity)
+  Green: change color pattern
+    - Rainbow
+    - Red and white
+    - Read, white, and blue
+    - Half rainbow half black
+
+Speed (* * * *)
   Fader: speed
-  Button: reverse
+  Green: reverse
 */
 
 
@@ -100,14 +110,15 @@ bool isDirectionReversed = false;
 int wait = 0;
 
 Modifier* modifier = &incrementModifier;  
-long (*Wheel)(byte input) = &RainbowWheel;
+long (*Wheel)(byte input) = &RainbowBlack;
 
 typedef struct {
   void (*UpdateLeds)(int offset);
   Modifier modifierA;
   Modifier modifierB;
 } Program;
-int currentProgram;
+
+int currentProgram = 2;
 
 
 Program programs[] = {
@@ -121,7 +132,7 @@ int numPrograms = sizeof(programs) / sizeof(Program);
 byte currentMode = 0;
 byte numModes = 4;
 
-byte currentColor = 0;
+byte currentColor = 3;
 int colorStretch = 1;
 
 void setup() {
@@ -153,8 +164,8 @@ void setup() {
 bool modeChangeLatch = false;
 bool dataChangeLatch = false;
 
-int modeIndicatorWait = 8;
-long tick = 0;
+int modeIndicatorWait = 8;  // power of two
+int tick = 0;
 void loop() { 
   int fader = analogRead(analogPin);  // read the input pin
   bool isModeChange = digitalRead(modePin) == LOW;
@@ -291,26 +302,26 @@ void RingsProgram(int offset) {
 }
 
 void PlaneProgram(int offset) {
-  float dirR = cos(PI * programs[currentProgram].modifierA.value / maxModifier);
-  float dirZ = sin(PI * programs[currentProgram].modifierA.value / maxModifier);
-  float dirX = cos(PI2 * programs[currentProgram].modifierB.value / maxModifier);
-  float dirY = sin(PI2 * programs[currentProgram].modifierB.value / maxModifier);
+  int dirR = cos(programs[currentProgram].modifierA.value);
+  int dirZ = sin(programs[currentProgram].modifierA.value);
+  int dirX = cos(programs[currentProgram].modifierB.value) * dirR / 1024;
+  int dirY = sin(programs[currentProgram].modifierB.value) * dirR / 1024;
   
   int levelFirst = 0;
   for (int i = 0; i < levels; i++) {
-    float radius = startRadius + layerRadiusIncrement * i;
+    int radius = startRadius + layerRadiusIncrement * i;
     for (int j = 0; j < levelCounts[i]; j++) {
       int index = levelFirst + j;
       Led led = leds[index];
-      float angle = PI2 * led.theta / 255;
-      float x = radius * cos(angle);
-      float y = radius * sin(angle);
-      float z = led.z;
+      int angle = led.theta * 4;
+      long x = radius * cos(angle);
+      long y = radius * sin(angle);
+      int z = led.z;
 
-      float dot = x * dirX + y * dirY + z * dirZ;
+      long dot = x * dirX + y * dirY + z * dirZ;
 
       strip.setPixelColor(index, 
-        Wheel((int(dot * 256 / 100) + offset + 256) % 256)
+        Wheel(((dot / 1024) + offset + 256) % 256)
       );
     }
     
